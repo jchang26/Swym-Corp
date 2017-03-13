@@ -87,3 +87,7 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Extra extensions to protect proprietary data
+*.zip
+*.csv
