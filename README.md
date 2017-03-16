@@ -1,6 +1,8 @@
 # swym-corp
 
-BUSINESS UNDERSTANDING
+<br />
+
+## BUSINESS UNDERSTANDING
 Swym is a company which aims to help ecommerce brands craft more seamless experiences for their shoppers, personalized around the shoppers' journey. The primary goal for this project is to use predictive algorithms to model online Shopify store customer journeys based on the available user context and leverage those predictions to optimize the experience for shoppers.
 
 ## DATA UNDERSTANDING
@@ -25,4 +27,4 @@ Accuracy of predictions within test dataset. Will probably cross-validate.
 Academic Paper detailing results and conclusions, and hopefully a web app where you can input user actions within a given session and see what the next predicted action is. Probability of eventual purchase follows directly and should be output as well.
 
 ## POSSIBLE NEXT STEPS
-Webscraping additional fields from actual page urls (i.e. product descriptions)
+Webscraping additional fields from actual page urls (i.e. product descriptions, images)
