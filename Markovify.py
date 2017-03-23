@@ -53,6 +53,9 @@ class Markovify(object):
         ]
         self.swym_x = None
         self.swym_y = None
+        self.referrer_tfidf = None
+        self.category_tfidf = None
+        self.modeling_df = None
 
     def subset_swym_data(self, data):
 
@@ -91,21 +94,46 @@ class Markovify(object):
 
         df = data.copy()
         output_columns = list(df.columns)
-        output_columns.append('elapsedtime')s
+        output_columns.append('elapsedtime')
+        output_columns.append('totalelapsedtime')
+        for o in range(self.order-1):
+            col_name = str(o+1)+'prioraction'
+            output_columns.append(col_name)
         output_columns.append('nextaction')
         output = pd.DataFrame(columns = output_columns)
+
         for i in df['sessionid'].unique():
             one_session = df[df['sessionid'] == i].sort_values('createddate')
             elapsedtime = np.zeros(one_session.shape[0],dtype = int)
+            totalelapsedtime = np.zeros(one_session.shape[0],dtype = int)
+            prioraction_dict = {}
+            for o in range(self.order-1):
+                prioraction_name = str(o+1)+'prioraction'
+                prioraction_dict[prioraction_name] = np.zeros(one_session.shape[0],dtype = int)
             nextaction = np.zeros(one_session.shape[0],dtype = int)
             for j in range(one_session.shape[0]):
                 if j > 0:
                     timedelta = one_session['createddate'].iloc[j]-one_session['createddate'].iloc[j-1]
+                    totaltimedelta = one_session['createddate'].iloc[j]-one_session['createddate'].iloc[0]
                     elapsedtime[j] = (timedelta/np.timedelta64(1,'s')).astype(int)
+                    totalelapsedtime[j] = (totaltimedelta/np.timedelta64(1,'s')).astype(int)
+                for o in range(self.order-1):
+                    prioraction_name = str(o+1)+'prioraction'
+                    if j > o:
+                        prioraction_dict[prioraction_name][j] = one_session['eventtype'].iloc[j-o-1]
                 if j < one_session.shape[0]-1:
                     nextaction[j] = one_session['eventtype'].iloc[j+1]
+
             one_session['elapsedtime'] = elapsedtime
+            one_session['totalelapsedtime'] = totalelapsedtime
+            for o in range(self.order-1):
+                col_name = str(o+1)+'prioraction'
+                one_session[col_name] = prioraction_dict[col_name]
             one_session['nextaction'] = nextaction
+
+            for o in range(self.order-1):
+                col_name = str(o+1)+'prioraction'
+                one_session = one_session[one_session[col_name] != 0]
             one_session = one_session[one_session['nextaction'] != 0]
             output = output.append(one_session, ignore_index = True)
         return output
@@ -130,7 +158,15 @@ class Markovify(object):
         }
         for i, j in events_desc.items():
             df[j] = df['eventtype'].apply(lambda x: 1 if x == i else 0)
-        df.drop('Delete from Wishlist', axis = 1, inplace = True)
+            for o in range(self.order-1):
+                event_name = j + ' ' + str(o+1)
+                prioraction_name = str(o+1)+'prioraction'
+                df[event_name] = df[prioraction_name].apply(lambda x: 1 if x == i else 0)
+        for q in range(self.order-1):
+            event_name = 'Add to Watchlist '+str(q+1)
+            df.drop(event_name, axis = 1, inplace = True)
+        df.drop('Add to Watchlist', axis = 1, inplace = True)
+
 
         dow_desc = {
             0.0: 'Monday',
@@ -171,7 +207,7 @@ class Markovify(object):
             df[a] = df['os'].apply(lambda x: 1 if x == a else 0)
 
         #NLP variables
-        tf_idf = TfidfVectorizer(stop_words = 'english')
+        tf_idf = TfidfVectorizer(stop_words = 'english', max_features = 100)
         tf_idf.fit(df['referrerurl'])
         referrer_vect = tf_idf.transform(df['referrerurl'])
         referrer_columns = tf_idf.get_feature_names()
@@ -191,6 +227,9 @@ class Markovify(object):
                 ,'eventtype','dayofweek','hour'
                 ,'devicecategory','devicetype','agenttype','os']
                 , axis = 1, inplace = True)
+        for q in range(self.order-1):
+            prioraction_name = str(o+1)+'prioraction'
+            df.drop(prioraction_name, axis = 1, inplace = True)
 
         return df, y
 
@@ -244,8 +283,8 @@ class Markovify(object):
 
         if self.subset != 0.0:
             df = self.subset_swym_data(df)
-        modeling_df = self.swym_next_action(df)
-        self.swym_x, self.swym_y = self.swym_featurize(modeling_df)
+        self.modeling_df = self.swym_next_action(df)
+        self.swym_x, self.swym_y = self.swym_featurize(self.modeling_df)
 
     def rfc_score(self, x = None, y = None):
         rfc = RandomForestClassifier()
@@ -256,5 +295,5 @@ class Markovify(object):
         return np.mean(cross_val_score(gbc,self.swym_x,self.swym_y,cv=5))
 
 if __name__ == '__main__':
-    example = Markovify(subset = 0.5)
+    example = Markovify(order = 2, subset = 0.25)
     example.load_swym_data('data/session_data_sample_030113.csv', 'data/devices_data_sample_030113.csv')
