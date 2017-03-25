@@ -221,6 +221,13 @@ class Markovify(object):
         category_df = pd.DataFrame(category_vect.toarray(), columns = category_columns)
         df = pd.concat([df,category_df], axis = 1)
 
+        tf_idf3 = TfidfVectorizer(stop_words = 'english', max_features = 100)
+        tf_idf3.fit(df['pagetitle'])
+        page_vect = tf_idf3.transform(df['pagetitle'])
+        page_columns = tf_idf3.get_feature_names()
+        page_df = pd.DataFrame(page_vect.toarray(), columns = page_columns)
+        df = pd.concat([df,page_df], axis = 1)
+
         #Drop variables
         df.drop(['sessionid','createddate','userid','deviceid','nextaction','providerid','productid'
                 ,'referrerurl','category','pagetitle'
@@ -255,11 +262,11 @@ class Markovify(object):
         df = df[df['eventtype'].notnull()]
 
         #Preliminary feature formatting and engineering
-        df['category'] = df['category'].fillna('Unknown')
+        df['category'] = df['category'].fillna('')
         df['createddate'] = pd.to_datetime(df['createddate'])
         df['dayofweek'] = df['createddate'].dt.dayofweek
         df['hour'] = df['createddate'].dt.hour
-        df['pagetitle'] = df['pagetitle'].fillna('Unknown')
+        df['pagetitle'] = df['pagetitle'].fillna('')
         df['userid'] = df['userid'].fillna('Unknown')
         df['providerid'] = df['providerid'].fillna('Unknown')
         df['productid'] = df['productid'].fillna(0.0)
