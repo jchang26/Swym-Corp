@@ -53,8 +53,12 @@ class Markovify(object):
         ]
         self.swym_x = None
         self.swym_y = None
+
         self.referrer_tfidf = None
         self.category_tfidf = None
+        self.page_tfidf = None
+
+        #For intermediate testing, remove later
         self.modeling_df = None
 
     def subset_swym_data(self, data):
@@ -67,7 +71,7 @@ class Markovify(object):
 
         return test
 
-    def clean_swym_device_data(self, device):
+    def clean_swym_device_data(self, session, device):
 
         df = device.copy()
 
@@ -84,11 +88,22 @@ class Markovify(object):
         os_list = ['iOS','Android','Windows','OS X', 'Linux']
         df['os'] = df['os'].apply(lambda x: x if x in os_list else 'Other')
 
-        df.drop(['osversion','useragent','providerid','createddate','userid','authtype']
+        df.drop(['osversion','useragent','providerid','createddate','authtype']
                , axis = 1, inplace = True)
         df = df[df.notnull()]
 
-        return df
+        session['key'] = session['userid']+session['deviceid']
+        df['key'] = df['userid']+df['deviceid']
+        df.drop(['deviceid','userid'], axis = 1, inplace = True)
+        df.set_index('key', inplace = True)
+        session = session.join(df, on = 'key', how = 'left')
+        session.drop('key', axis = 1, inplace = True)
+        session['devicecategory'] = session['devicecategory'].fillna('Unknown')
+        session['devicetype'] = session['devicetype'].fillna('Unknown')
+        session['agenttype'] = session['agenttype'].fillna('Unknown')
+        session['os'] = session['os'].fillna('Unknown')
+
+        return session
 
     def swym_next_action(self, data):
 
@@ -207,24 +222,24 @@ class Markovify(object):
             df[a] = df['os'].apply(lambda x: 1 if x == a else 0)
 
         #NLP variables
-        tf_idf = TfidfVectorizer(stop_words = 'english', max_features = 100)
-        tf_idf.fit(df['referrerurl'])
-        referrer_vect = tf_idf.transform(df['referrerurl'])
-        referrer_columns = tf_idf.get_feature_names()
+        self.referrer_tfidf = TfidfVectorizer(stop_words = 'english', max_features = 100)
+        self.referrer_tfidf.fit(df['referrerurl'])
+        referrer_vect = self.referrer_tfidf.transform(df['referrerurl'])
+        referrer_columns = self.referrer_tfidf.get_feature_names()
         referrer_df = pd.DataFrame(referrer_vect.toarray(), columns = referrer_columns)
         df = pd.concat([df,referrer_df], axis = 1)
 
-        tf_idf2 = TfidfVectorizer(stop_words = 'english', max_features = 100)
-        tf_idf2.fit(df['category'])
-        category_vect = tf_idf2.transform(df['category'])
-        category_columns = tf_idf2.get_feature_names()
+        self.category_tfidf = TfidfVectorizer(stop_words = 'english', max_features = 100)
+        self.category_tfidf.fit(df['category'])
+        category_vect = self.category_tfidf.transform(df['category'])
+        category_columns = self.category_tfidf.get_feature_names()
         category_df = pd.DataFrame(category_vect.toarray(), columns = category_columns)
         df = pd.concat([df,category_df], axis = 1)
 
-        tf_idf3 = TfidfVectorizer(stop_words = 'english', max_features = 100)
-        tf_idf3.fit(df['pagetitle'])
-        page_vect = tf_idf3.transform(df['pagetitle'])
-        page_columns = tf_idf3.get_feature_names()
+        self.page_tfidf = TfidfVectorizer(stop_words = 'english', max_features = 100)
+        self.page_tfidf.fit(df['pagetitle'])
+        page_vect = self.page_tfidf.transform(df['pagetitle'])
+        page_columns = self.page_tfidf.get_feature_names()
         page_df = pd.DataFrame(page_vect.toarray(), columns = page_columns)
         df = pd.concat([df,page_df], axis = 1)
 
@@ -240,6 +255,27 @@ class Markovify(object):
 
         return df, y
 
+    def swym_prior_history(self, data):
+
+        df = data.copy()
+        df['identifier'] = df['sessionid'] + df['userid']
+        trunc = df[['sessionid','userid','createddate']]
+        trunc = trunc.groupby(['sessionid','userid'], as_index = False).agg({'createddate': 'min'})
+        trunc = trunc.sort_values(['userid','sessionid','createddate'])
+        prior_hist = np.zeros(trunc.shape[0], dtype = int)
+        for row in range(trunc.shape[0]):
+            if row > 0:
+                if trunc['userid'].iloc[row] == trunc['userid'].iloc[row-1] and trunc['createddate'].iloc[row] > trunc['createddate'].iloc[row-1]:
+                    prior_hist[row] = 1
+        trunc['hist_ind'] = prior_hist
+        trunc['identifier'] = trunc['sessionid'] + trunc['userid']
+        trunc.drop(['sessionid','userid','createddate'],axis = 1, inplace = True)
+        trunc.set_index('identifier', inplace = True)
+        df = df.join(trunc, on = 'identifier', how = 'left')
+        df.drop('identifier',axis = 1, inplace = True)
+        df['hist_ind'] = df['hist_ind'].fillna(0)
+        return df
+
     def load_swym_data(self, session_path, device_path):
 
         session = pd.read_csv(session_path, header = None)
@@ -248,7 +284,7 @@ class Markovify(object):
         device.columns = self.device_columns
 
         df = session.copy()
-        df2 = device.copy()
+        #df2 = device.copy()
 
         #Drop unnecessary columns
         df.drop(['imageurl','pageurl','fullurl','normalizedpageurl','rawpageurl','rawreferrerurl'
@@ -267,30 +303,26 @@ class Markovify(object):
         df['dayofweek'] = df['createddate'].dt.dayofweek
         df['hour'] = df['createddate'].dt.hour
         df['pagetitle'] = df['pagetitle'].fillna('')
-        df['userid'] = df['userid'].fillna('Unknown')
         df['providerid'] = df['providerid'].fillna('Unknown')
         df['productid'] = df['productid'].fillna(0.0)
-        df['referrerurl'] = df['referrerurl'].fillna('Unknown')
+        df['referrerurl'] = df['referrerurl'].fillna('')
         df['referrerurl'] = df['referrerurl'].apply(urlparse)
         df['referrerurl'] = df['referrerurl'].apply(lambda x: x.netloc)
         df['deviceid'] = df['deviceid'].fillna('Unknown')
         df['quantity'] = df['quantity'].fillna(0.0)
         df['price'] = df['price'].fillna(0.0)
 
+        print df.shape
         #Join on device data
-        df2 = self.clean_swym_device_data(df2)
-        df2.set_index('deviceid', inplace = True)
-        df = df.join(df2, on = 'deviceid', how = 'left')
-        df['devicecategory'] = df['devicecategory'].fillna('Unknown')
-        df['devicetype'] = df['devicetype'].fillna('Unknown')
-        df['agenttype'] = df['agenttype'].fillna('Unknown')
-        df['os'] = df['os'].fillna('Unknown')
-
-        #Prior history within timeframe feature
-
+        df = self.clean_swym_device_data(df, device)
+        print df.shape
+        df = self.swym_prior_history(df)
+        print df.shape
         if self.subset != 0.0:
             df = self.subset_swym_data(df)
+        print df.shape
         self.modeling_df = self.swym_next_action(df)
+        print df.shape
         self.swym_x, self.swym_y = self.swym_featurize(self.modeling_df)
 
     def rfc_score(self, x = None, y = None):
@@ -302,5 +334,5 @@ class Markovify(object):
         return np.mean(cross_val_score(gbc,self.swym_x,self.swym_y,cv=5))
 
 if __name__ == '__main__':
-    example = Markovify(order = 2, subset = 0.25)
-    example.load_swym_data('data/session_data_sample_030113.csv', 'data/devices_data_sample_030113.csv')
+    example = Markovify(subset = 0.25)
+    example.load_swym_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
