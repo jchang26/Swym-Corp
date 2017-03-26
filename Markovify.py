@@ -8,9 +8,14 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
 
 class Markovify(object):
-    def __init__(self, order = 1, subset = 0.0):
+    def __init__(self, order = 1, subset = 1.0):
+        #Order of prior actions to be derived
         self.order = order
+
+        #Proportion of dataset to consider, for speed of calculation purposes
         self.subset = subset
+
+        #Standard column names for session and device data
         self.session_columns  = [
             'sessionid',
             'category',
@@ -51,18 +56,21 @@ class Markovify(object):
             'userid',
             'authtype'
         ]
+
+        #Initialize final output modeling matrices
         self.swym_x = None
         self.swym_y = None
 
+        #Initialize tf-idf vectors
         self.referrer_tfidf = None
         self.category_tfidf = None
         self.page_tfidf = None
 
-        #For intermediate testing, remove later
+        #For intermediate testing of script, remove later
         self.modeling_df = None
 
-    def subset_swym_data(self, data):
-
+    def swym_subset_data(self, data):
+        #Split data if applicable
         df = data.copy()
         unique_sessions = df['sessionid'].unique()
         train_sess, test_sess = train_test_split(unique_sessions, test_size = self.subset)
@@ -71,10 +79,43 @@ class Markovify(object):
 
         return test
 
-    def clean_swym_device_data(self, session, device):
+    def swym_prelim_clean(self, session):
+        #Preliminary scrubbing of session data, no complicated feature engineering
+        df = session.copy()
 
+        #Drop unnecessary columns
+        df.drop(['imageurl','pageurl','fullurl','normalizedpageurl','rawpageurl','rawreferrerurl'
+                ,'utmsource','utmmedium','utmcontent','utmcampaign','utmterm','ipaddress','requesttype']
+                ,axis = 1, inplace = True)
+
+        #Drop null sessionid, createddate and eventtype
+        #Affect ability to derive predicted variable
+        df = df[df['sessionid'].notnull()]
+        df = df[df['createddate'].notnull()]
+        df = df[df['eventtype'].notnull()]
+
+        #Preliminary feature formatting and engineering
+        df['category'] = df['category'].fillna('')
+        df['createddate'] = pd.to_datetime(df['createddate'])
+        df['dayofweek'] = df['createddate'].dt.dayofweek
+        df['hour'] = df['createddate'].dt.hour
+        df['pagetitle'] = df['pagetitle'].fillna('')
+        df['providerid'] = df['providerid'].fillna('Unknown')
+        df['productid'] = df['productid'].fillna(0.0)
+        df['referrerurl'] = df['referrerurl'].fillna('')
+        df['referrerurl'] = df['referrerurl'].apply(urlparse)
+        df['referrerurl'] = df['referrerurl'].apply(lambda x: x.netloc)
+        df['deviceid'] = df['deviceid'].fillna('Unknown')
+        df['quantity'] = df['quantity'].fillna(0.0)
+        df['price'] = df['price'].fillna(0.0)
+
+        return df
+
+    def swym_clean_device(self, session, device):
+        #Prep device data and join onto session data by deviceid
         df = device.copy()
 
+        #Group "Other" entries in relevant features, drop unnecessary columns
         category_list = ['iPhone','Windows PC','Android phone','Mac','iPad','Linux PC'
                         ,'Android PC','Android tablet','Windows phone']
         df['devicecategory'] = df['devicecategory'].apply(lambda x: x if x in category_list else 'Other')
@@ -88,16 +129,16 @@ class Markovify(object):
         os_list = ['iOS','Android','Windows','OS X', 'Linux']
         df['os'] = df['os'].apply(lambda x: x if x in os_list else 'Other')
 
-        df.drop(['osversion','useragent','providerid','createddate','authtype']
+        df.drop(['osversion','useragent','providerid','createddate','userid','authtype']
                , axis = 1, inplace = True)
         df = df[df.notnull()]
 
-        session['key'] = session['userid']+session['deviceid']
-        df['key'] = df['userid']+df['deviceid']
-        df.drop(['deviceid','userid'], axis = 1, inplace = True)
-        df.set_index('key', inplace = True)
-        session = session.join(df, on = 'key', how = 'left')
-        session.drop('key', axis = 1, inplace = True)
+        #Can have multiple users per device, but since only want device info can ignore
+        df.drop_duplicates(subset = 'deviceid', keep = 'first', inplace = True)
+
+        #Join device data onto session data
+        df.set_index('deviceid', inplace = True)
+        session = session.join(df, on = 'deviceid', how = 'left')
         session['devicecategory'] = session['devicecategory'].fillna('Unknown')
         session['devicetype'] = session['devicetype'].fillna('Unknown')
         session['agenttype'] = session['agenttype'].fillna('Unknown')
@@ -154,7 +195,7 @@ class Markovify(object):
         return output
 
     def swym_featurize(self, data):
-
+        #Create dummy and NLP features for data
         df = data.copy()
 
         #Dependent Variable
@@ -181,7 +222,6 @@ class Markovify(object):
             event_name = 'Add to Watchlist '+str(q+1)
             df.drop(event_name, axis = 1, inplace = True)
         df.drop('Add to Watchlist', axis = 1, inplace = True)
-
 
         dow_desc = {
             0.0: 'Monday',
@@ -261,11 +301,12 @@ class Markovify(object):
         df['identifier'] = df['sessionid'] + df['userid']
         trunc = df[['sessionid','userid','createddate']]
         trunc = trunc.groupby(['sessionid','userid'], as_index = False).agg({'createddate': 'min'})
-        trunc = trunc.sort_values(['userid','sessionid','createddate'])
+        trunc = trunc.sort_values(['userid','createddate'])
         prior_hist = np.zeros(trunc.shape[0], dtype = int)
         for row in range(trunc.shape[0]):
             if row > 0:
-                if trunc['userid'].iloc[row] == trunc['userid'].iloc[row-1] and trunc['createddate'].iloc[row] > trunc['createddate'].iloc[row-1]:
+                if trunc['userid'].iloc[row] == trunc['userid'].iloc[row-1]:
+                #and trunc['createddate'].iloc[row] > trunc['createddate'].iloc[row-1]:
                     prior_hist[row] = 1
         trunc['hist_ind'] = prior_hist
         trunc['identifier'] = trunc['sessionid'] + trunc['userid']
@@ -274,65 +315,43 @@ class Markovify(object):
         df = df.join(trunc, on = 'identifier', how = 'left')
         df.drop('identifier',axis = 1, inplace = True)
         df['hist_ind'] = df['hist_ind'].fillna(0)
+        df['userid'] = df['userid'].fillna('Unknown')
+
         return df
 
-    def load_swym_data(self, session_path, device_path):
-
+    def swym_load_data(self, session_path, device_path):
+        #Read in swym session and device data for some time period
         session = pd.read_csv(session_path, header = None)
         session.columns = self.session_columns
         device = pd.read_csv(device_path, header = None)
         device.columns = self.device_columns
-
         df = session.copy()
-        #df2 = device.copy()
+        df2 = device.copy()
 
-        #Drop unnecessary columns
-        df.drop(['imageurl','pageurl','fullurl','normalizedpageurl','rawpageurl','rawreferrerurl'
-                ,'utmsource','utmmedium','utmcontent','utmcampaign','utmterm','ipaddress','requesttype']
-                ,axis = 1, inplace = True)
-
-        #Drop null sessionid, createddate and eventtype
-        #Affect ability to derive predicted variable
-        df = df[df['sessionid'].notnull()]
-        df = df[df['createddate'].notnull()]
-        df = df[df['eventtype'].notnull()]
-
-        #Preliminary feature formatting and engineering
-        df['category'] = df['category'].fillna('')
-        df['createddate'] = pd.to_datetime(df['createddate'])
-        df['dayofweek'] = df['createddate'].dt.dayofweek
-        df['hour'] = df['createddate'].dt.hour
-        df['pagetitle'] = df['pagetitle'].fillna('')
-        df['providerid'] = df['providerid'].fillna('Unknown')
-        df['productid'] = df['productid'].fillna(0.0)
-        df['referrerurl'] = df['referrerurl'].fillna('')
-        df['referrerurl'] = df['referrerurl'].apply(urlparse)
-        df['referrerurl'] = df['referrerurl'].apply(lambda x: x.netloc)
-        df['deviceid'] = df['deviceid'].fillna('Unknown')
-        df['quantity'] = df['quantity'].fillna(0.0)
-        df['price'] = df['price'].fillna(0.0)
-
-        print df.shape
+        #Preliminary cleaning and feature engineering
+        df = self.swym_prelim_clean(df)
         #Join on device data
-        df = self.clean_swym_device_data(df, device)
-        print df.shape
+        df = self.swym_clean_device(df, df2)
+        #Add on prior session history indicator
         df = self.swym_prior_history(df)
-        print df.shape
-        if self.subset != 0.0:
-            df = self.subset_swym_data(df)
-        print df.shape
+        #Subset for speed, if applicable
+        if self.subset != 1.0:
+            df = self.swym_subset_data(df)
+        #Add on next action predicted variable and prior actions if applicable
         self.modeling_df = self.swym_next_action(df)
-        print df.shape
+        #Replace categorical variables with dummies and fit tf-idf columns
         self.swym_x, self.swym_y = self.swym_featurize(self.modeling_df)
 
     def rfc_score(self, x = None, y = None):
-        rfc = RandomForestClassifier()
+        #Evaluate Random Forest via 5-folds cross validated score
+        rfc = RandomForestClassifier(max_features = None, max_depth = 5, n_jobs = -1)
         return np.mean(cross_val_score(rfc,self.swym_x,self.swym_y,cv=5))
 
     def gbc_score(self, x = None, y = None):
+        #Evaluate Gradient Boosting via 5-folds cross validated score
         gbc = GradientBoostingClassifier()
         return np.mean(cross_val_score(gbc,self.swym_x,self.swym_y,cv=5))
 
 if __name__ == '__main__':
-    example = Markovify(subset = 0.25)
-    example.load_swym_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
+    example = Markovify()
+    example.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
