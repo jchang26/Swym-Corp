@@ -66,8 +66,12 @@ class Markovify(object):
         self.category_tfidf = None
         self.page_tfidf = None
 
-        #For intermediate testing of script, remove later
-        self.modeling_df = None
+        #Testing dataset matrices
+        self.test_x = None
+        self.test_y = None
+
+        #Model final selection
+        self.model = None
 
     def swym_subset_data(self, data):
         #Split data if applicable
@@ -147,8 +151,10 @@ class Markovify(object):
         return session
 
     def swym_next_action(self, data):
-
+        #Creates predicted next action and session history variables
         df = data.copy()
+
+        #Initialize empty dataframe to attach each session onto
         output_columns = list(df.columns)
         output_columns.append('elapsedtime')
         output_columns.append('totalelapsedtime')
@@ -158,6 +164,8 @@ class Markovify(object):
         output_columns.append('nextaction')
         output = pd.DataFrame(columns = output_columns)
 
+        #For each session, calculate time since last action, total elapsed session time
+        #Prior actions depending on order of class
         for i in df['sessionid'].unique():
             one_session = df[df['sessionid'] == i].sort_values('createddate')
             elapsedtime = np.zeros(one_session.shape[0],dtype = int)
@@ -180,6 +188,7 @@ class Markovify(object):
                 if j < one_session.shape[0]-1:
                     nextaction[j] = one_session['eventtype'].iloc[j+1]
 
+            #Append new columns to each session
             one_session['elapsedtime'] = elapsedtime
             one_session['totalelapsedtime'] = totalelapsedtime
             for o in range(self.order-1):
@@ -187,6 +196,7 @@ class Markovify(object):
                 one_session[col_name] = prioraction_dict[col_name]
             one_session['nextaction'] = nextaction
 
+            #Drop rows missing necessary modeling information and append to output
             for o in range(self.order-1):
                 col_name = str(o+1)+'prioraction'
                 one_session = one_session[one_session[col_name] != 0]
@@ -194,12 +204,9 @@ class Markovify(object):
             output = output.append(one_session, ignore_index = True)
         return output
 
-    def swym_featurize(self, data):
-        #Create dummy and NLP features for data
+    def swym_dummy_featurize(self, data):
+        #Create dummy features for data
         df = data.copy()
-
-        #Dependent Variable
-        y = df['nextaction']
 
         #Create dummy variables for session data
         events_desc = {
@@ -261,7 +268,13 @@ class Markovify(object):
         for a in os_list:
             df[a] = df['os'].apply(lambda x: 1 if x == a else 0)
 
-        #NLP variables
+        return df
+
+    def swym_nlp_featurize(self, data):
+        #Create nlp features, important word counts
+        df = data.copy()
+
+        #Fit tf-idf vectors for applicable columns
         self.referrer_tfidf = TfidfVectorizer(stop_words = 'english', max_features = 100)
         self.referrer_tfidf.fit(df['referrerurl'])
         referrer_vect = self.referrer_tfidf.transform(df['referrerurl'])
@@ -283,6 +296,37 @@ class Markovify(object):
         page_df = pd.DataFrame(page_vect.toarray(), columns = page_columns)
         df = pd.concat([df,page_df], axis = 1)
 
+        return df
+
+    def swym_nlp_read(self, data):
+        #Create nlp features, important word counts for test data
+        df = data.copy()
+
+        #Attach same tf-idf vectors for applicable columns to test data
+        referrer_vect = self.referrer_tfidf.transform(df['referrerurl'])
+        referrer_columns = self.referrer_tfidf.get_feature_names()
+        referrer_df = pd.DataFrame(referrer_vect.toarray(), columns = referrer_columns)
+        df = pd.concat([df,referrer_df], axis = 1)
+
+        category_vect = self.category_tfidf.transform(df['category'])
+        category_columns = self.category_tfidf.get_feature_names()
+        category_df = pd.DataFrame(category_vect.toarray(), columns = category_columns)
+        df = pd.concat([df,category_df], axis = 1)
+
+        page_vect = self.page_tfidf.transform(df['pagetitle'])
+        page_columns = self.page_tfidf.get_feature_names()
+        page_df = pd.DataFrame(page_vect.toarray(), columns = page_columns)
+        df = pd.concat([df,page_df], axis = 1)
+
+        return df
+
+    def swym_trim_data(self, data):
+        #Delete extraneous columns that were otherwise featurized
+        df = data.copy()
+
+        #Dependent Variable
+        y = df['nextaction']
+
         #Drop variables
         df.drop(['sessionid','createddate','userid','deviceid','nextaction','providerid','productid'
                 ,'referrerurl','category','pagetitle'
@@ -296,19 +340,24 @@ class Markovify(object):
         return df, y
 
     def swym_prior_history(self, data):
-
+        #Check time frame for prior sessions
         df = data.copy()
+
+        #Unique user sessions, ordered by time session began
         df['identifier'] = df['sessionid'] + df['userid']
         trunc = df[['sessionid','userid','createddate']]
         trunc = trunc.groupby(['sessionid','userid'], as_index = False).agg({'createddate': 'min'})
         trunc = trunc.sort_values(['userid','createddate'])
+
+        #If prior session exists in time frame for user, then has history
         prior_hist = np.zeros(trunc.shape[0], dtype = int)
         for row in range(trunc.shape[0]):
             if row > 0:
                 if trunc['userid'].iloc[row] == trunc['userid'].iloc[row-1]:
-                #and trunc['createddate'].iloc[row] > trunc['createddate'].iloc[row-1]:
                     prior_hist[row] = 1
         trunc['hist_ind'] = prior_hist
+
+        #Join back on by user session ID
         trunc['identifier'] = trunc['sessionid'] + trunc['userid']
         trunc.drop(['sessionid','userid','createddate'],axis = 1, inplace = True)
         trunc.set_index('identifier', inplace = True)
@@ -338,20 +387,60 @@ class Markovify(object):
         if self.subset != 1.0:
             df = self.swym_subset_data(df)
         #Add on next action predicted variable and prior actions if applicable
-        self.modeling_df = self.swym_next_action(df)
-        #Replace categorical variables with dummies and fit tf-idf columns
-        self.swym_x, self.swym_y = self.swym_featurize(self.modeling_df)
+        df = self.swym_next_action(df)
+        #Replace categorical variables with dummies
+        df = self.swym_dummy_featurize(df)
+        #Fit tf-idf columns
+        df = self.swym_nlp_featurize(df)
+        #Output final modeling data
+        self.swym_x, self.swym_y = self.swym_trim_data(df)
 
-    def rfc_score(self, x = None, y = None):
+    def swym_read_new(self, session_path, device_path):
+        #Read in swym session and device data for some time period
+        session = pd.read_csv(session_path, header = None)
+        session.columns = self.session_columns
+        device = pd.read_csv(device_path, header = None)
+        device.columns = self.device_columns
+        df = session.copy()
+        df2 = device.copy()
+
+        #Preliminary cleaning and feature engineering
+        df = self.swym_prelim_clean(df)
+        #Join on device data
+        df = self.swym_clean_device(df, df2)
+        #Add on prior session history indicator
+        df = self.swym_prior_history(df)
+        #Add on next action predicted variable and prior actions if applicable
+        df = self.swym_next_action(df)
+        #Replace categorical variables with dummies
+        df = self.swym_dummy_featurize(df)
+        #Apply fitted tf-idf columns
+        df = self.swym_nlp_read(df)
+        #Output final test data
+        self.test_x, self.test_y = self.swym_trim_data(df)
+
+    def rfc_test(self):
         #Evaluate Random Forest via 5-folds cross validated score
         rfc = RandomForestClassifier(max_features = None, max_depth = 5, n_jobs = -1)
         return np.mean(cross_val_score(rfc,self.swym_x,self.swym_y,cv=5))
 
-    def gbc_score(self, x = None, y = None):
-        #Evaluate Gradient Boosting via 5-folds cross validated score
+    def gbc_test(self):
+        #Evaluate Gradient Boosting via 5-folds cross vexamplalidated score
         gbc = GradientBoostingClassifier()
         return np.mean(cross_val_score(gbc,self.swym_x,self.swym_y,cv=5))
 
+    def rfc_fit(self):
+        self.model = RandomForestClassifier(max_features = None, max_depth = 5, n_jobs = -1)
+        self.model.fit(self.swym_x, self.swym_y)
+
+    def rfc_score(self):
+        return self.model.score(self.test_x, self.test_y)
+
 if __name__ == '__main__':
-    example = Markovify()
-    example.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
+    for i in range(6):
+        example = Markovify(order = i+1)
+        example.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
+        print 'Order ' + str(i) + ' RFC cross-validation score = ' + str(example.rfc_test())
+        example.rfc_fit()
+        example.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
+        print 'Order ' + str(i) + ' RFC testing score = ' + str(example.rfc_score())
