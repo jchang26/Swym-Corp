@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
 
-class Markovify(object):
+class Swymify(object):
     def __init__(self, order = 1, subset = 1.0):
         #Order of prior actions to be derived
         self.order = order
@@ -57,6 +57,18 @@ class Markovify(object):
             'authtype'
         ]
 
+        #Possible events dictionary
+        self.events_desc = {
+            -1: 'Delete from Wishlist',
+            1: 'Page View',
+            3: 'Add to Cart',
+            4: 'Add to Wishlist',
+            6: 'Purchase',
+            7: 'Remove from Cart',
+            8: 'Add to Watchlist',
+            104: 'Begin Checkout'
+        }
+
         #Initialize final output modeling matrices
         self.swym_x = None
         self.swym_y = None
@@ -72,6 +84,9 @@ class Markovify(object):
 
         #Model final selection
         self.model = None
+
+        #First order Markov Chain transition matrix
+        self.Markov_mat = None
 
     def swym_subset_data(self, data):
         #Split data if applicable
@@ -202,6 +217,7 @@ class Markovify(object):
                 one_session = one_session[one_session[col_name] != 0]
             one_session = one_session[one_session['nextaction'] != 0]
             output = output.append(one_session, ignore_index = True)
+
         return output
 
     def swym_dummy_featurize(self, data):
@@ -209,17 +225,7 @@ class Markovify(object):
         df = data.copy()
 
         #Create dummy variables for session data
-        events_desc = {
-            -1: 'Delete from Wishlist',
-            1: 'Page View',
-            3: 'Add to Cart',
-            4: 'Add to Wishlist',
-            6: 'Purchase',
-            7: 'Remove from Cart',
-            8: 'Add to Watchlist',
-            104: 'Begin Checkout'
-        }
-        for i, j in events_desc.items():
+        for i, j in self.events_desc.items():
             df[j] = df['eventtype'].apply(lambda x: 1 if x == i else 0)
             for o in range(self.order-1):
                 event_name = j + ' ' + str(o+1)
@@ -369,7 +375,7 @@ class Markovify(object):
         return df
 
     def swym_load_data(self, session_path, device_path):
-        #Read in swym session and device data for some time period
+        #Read in swym session and device data for some time period for training
         session = pd.read_csv(session_path, header = None)
         session.columns = self.session_columns
         device = pd.read_csv(device_path, header = None)
@@ -396,7 +402,7 @@ class Markovify(object):
         self.swym_x, self.swym_y = self.swym_trim_data(df)
 
     def swym_read_new(self, session_path, device_path):
-        #Read in swym session and device data for some time period
+        #Read in swym session and device data for some time period for testing
         session = pd.read_csv(session_path, header = None)
         session.columns = self.session_columns
         device = pd.read_csv(device_path, header = None)
@@ -426,7 +432,7 @@ class Markovify(object):
 
     def gbc_test(self):
         #Evaluate Gradient Boosting via 5-folds cross vexamplalidated score
-        gbc = GradientBoostingClassifier()
+        gbc = GradientBoostingClassifier(learning_rate = 0.01, n_estimators = 1000)
         return np.mean(cross_val_score(gbc,self.swym_x,self.swym_y,cv=5))
 
     def rfc_fit(self):
@@ -438,11 +444,48 @@ class Markovify(object):
         #Score accuracy of selected random forest model on test dataset
         return self.model.score(self.test_x, self.test_y)
 
+    def markovify(self, single_session, single_device):
+        #Pass in initial session and corresponding device data
+        #Build 1st order markov transition matrix
+        if self.order != 1:
+            print 'Must be first order Markov Chain'
+        else:
+            session = pd.read_csv(single_session, header = None)
+            session.columns = self.session_columns
+            device = pd.read_csv(single_device, header = None)
+            device.columns = self.device_columns
+            df = session.copy()
+            df2 = device.copy()
+
+            #Preliminary cleaning and feature engineering
+            df = self.swym_prelim_clean(df)
+            #Join on device data
+            df = self.swym_clean_device(df, df2)
+            #Add on prior session history indicator
+            df = self.swym_prior_history(df)
+            #Initialize elapsed time and add placeholder for predicted next action
+            df['elapsedtime'] = 0
+            df['totalelapsedtime'] = 0
+            df['nextaction'] = -1
+            #Replace categorical variables with dummies
+            df = self.swym_dummy_featurize(df)
+            #Apply fitted tf-idf columns
+            df = self.swym_nlp_read(df)
+            #Output single session formatted data
+            single_x, single_y = self.swym_trim_data(df)
+            self.Markov_mat = self.model.predict_proba(single_x)
+
 if __name__ == '__main__':
     for i in range(6):
-        example = Markovify(order = i+1)
+        example = Swymify(order = i+1)
         example.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
         print 'Order ' + str(i+1) + ' RFC cross-validation score = ' + str(example.rfc_test())
         example.rfc_fit()
         example.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
         print 'Order ' + str(i+1) + ' RFC testing score = ' + str(example.rfc_score())
+    #Markov_test = Swymify()
+    #Markov_test.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
+    #print Markov_test.rfc_test()
+    #Markov_test.rfc_fit()
+    #Markov_test.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
+    #print Markov_test.rfc_score()
