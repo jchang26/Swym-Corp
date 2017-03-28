@@ -88,6 +88,9 @@ class Swymify(object):
         #First order Markov Chain transition matrix
         self.Markov_mat = None
 
+        #Intermediate step for testing and validation of code
+        self.modeling_df = None
+
     def swym_subset_data(self, data):
         #Split data if applicable
         df = data.copy()
@@ -393,9 +396,9 @@ class Swymify(object):
         if self.subset != 1.0:
             df = self.swym_subset_data(df)
         #Add on next action predicted variable and prior actions if applicable
-        df = self.swym_next_action(df)
+        self.modeling_df = self.swym_next_action(df)
         #Replace categorical variables with dummies
-        df = self.swym_dummy_featurize(df)
+        df = self.swym_dummy_featurize(self.modeling_df)
         #Fit tf-idf columns
         df = self.swym_nlp_featurize(df)
         #Output final modeling data
@@ -444,15 +447,15 @@ class Swymify(object):
         #Score accuracy of selected random forest model on test dataset
         return self.model.score(self.test_x, self.test_y)
 
-    def markovify(self, single_session, single_device):
+    def markovify(self, session_path, device_path, single_session):
         #Pass in initial session and corresponding device data
         #Build 1st order markov transition matrix
         if self.order != 1:
             print 'Must be first order Markov Chain'
         else:
-            session = pd.read_csv(single_session, header = None)
+            session = pd.read_csv(session_path, header = None)
             session.columns = self.session_columns
-            device = pd.read_csv(single_device, header = None)
+            device = pd.read_csv(device_path, header = None)
             device.columns = self.device_columns
             df = session.copy()
             df2 = device.copy()
@@ -463,6 +466,8 @@ class Swymify(object):
             df = self.swym_clean_device(df, df2)
             #Add on prior session history indicator
             df = self.swym_prior_history(df)
+            #Only use single session data
+            df = df[df['sessionid'] == single_session].sort_values('createddate').iloc[0]
             #Initialize elapsed time and add placeholder for predicted next action
             df['elapsedtime'] = 0
             df['totalelapsedtime'] = 0
@@ -473,9 +478,19 @@ class Swymify(object):
             df = self.swym_nlp_read(df)
             #Output single session formatted data
             single_x, single_y = self.swym_trim_data(df)
-            self.Markov_mat = self.model.predict_proba(single_x)
+            Markov_dict = {}
+            for i in self.events_desc.values():
+                Markov_x = single_x.copy()
+                if i != 'Add to Watchlist':
+                    Markov_x[i] = 1
+                    for j in self.events_desc.values():
+                        if j != 'Add to Watchlist' and j != i:
+                            Markov_x[j] = 0
+                Markov_dict[i] = self.model.predict_proba(Markov_x)
+            return Markov_dict
 
 if __name__ == '__main__':
+    '''
     for i in range(6):
         example = Swymify(order = i+1)
         example.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
@@ -483,9 +498,10 @@ if __name__ == '__main__':
         example.rfc_fit()
         example.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
         print 'Order ' + str(i+1) + ' RFC testing score = ' + str(example.rfc_score())
-    #Markov_test = Swymify()
-    #Markov_test.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
-    #print Markov_test.rfc_test()
-    #Markov_test.rfc_fit()
-    #Markov_test.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
-    #print Markov_test.rfc_score()
+    '''
+    Markov_test = Swymify()
+    Markov_test.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
+    print Markov_test.rfc_test()
+    Markov_test.rfc_fit()
+    Markov_test.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
+    print Markov_test.rfc_score()
