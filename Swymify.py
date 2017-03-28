@@ -467,7 +467,7 @@ class Swymify(object):
             #Add on prior session history indicator
             df = self.swym_prior_history(df)
             #Only use single session data
-            df = df[df['sessionid'] == single_session].sort_values('createddate').iloc[0]
+            df = df[df['sessionid'] == single_session].sort_values('createddate').head(1)
             #Initialize elapsed time and add placeholder for predicted next action
             df['elapsedtime'] = 0
             df['totalelapsedtime'] = 0
