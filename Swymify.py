@@ -85,10 +85,11 @@ class Swymify(object):
         #Model final selection
         self.model = None
 
-        #First order Markov Chain transition matrix
+        #First order Markov Chain transition matrix and row/column key
         self.Markov_mat = None
+        self.Markov_classes = None
 
-        #Intermediate step for testing and validation of code
+        #Intermediate step for testing and validation of code, and single session initialization
         self.modeling_df = None
 
     def swym_subset_data(self, data):
@@ -447,36 +448,22 @@ class Swymify(object):
         #Score accuracy of selected random forest model on test dataset
         return self.model.score(self.test_x, self.test_y)
 
-    def markovify(self, session_path, device_path, single_session):
+    def markovify(self, single_session):
         #Pass in initial session and corresponding device data
         #Build 1st order markov transition matrix
         if self.order != 1:
             print 'Must be first order Markov Chain'
         else:
-            session = pd.read_csv(session_path, header = None)
-            session.columns = self.session_columns
-            device = pd.read_csv(device_path, header = None)
-            device.columns = self.device_columns
-            df = session.copy()
-            df2 = device.copy()
-
-            #Preliminary cleaning and feature engineering
-            df = self.swym_prelim_clean(df)
-            #Join on device data
-            df = self.swym_clean_device(df, df2)
-            #Add on prior session history indicator
-            df = self.swym_prior_history(df)
+            #Start from preloaded data
+            df = self.modeling_df.copy()
             #Only use single session data
             df = df[df['sessionid'] == single_session].sort_values('createddate').head(1)
-            #Initialize elapsed time and add placeholder for predicted next action
-            df['elapsedtime'] = 0
-            df['totalelapsedtime'] = 0
-            df['nextaction'] = -1
+            df.reset_index(drop = True, inplace = True)
             #Replace categorical variables with dummies
             df = self.swym_dummy_featurize(df)
             #Apply fitted tf-idf columns
             df = self.swym_nlp_read(df)
-            #Output single session formatted data
+            #Output single session formatted data as dictionary
             single_x, single_y = self.swym_trim_data(df)
             Markov_dict = {}
             for i in self.events_desc.values():
@@ -487,7 +474,15 @@ class Swymify(object):
                         if j != 'Add to Watchlist' and j != i:
                             Markov_x[j] = 0
                 Markov_dict[i] = self.model.predict_proba(Markov_x)
-            return Markov_dict
+            #Change to numpy matrix for easier use
+            self.Markov_classes = np.empty(len(self.model.classes_), dtype = str)
+            for j in range(len(self.Markov_classes)):
+                self.Markov_classes[j] = self.events_desc[self.model.classes_[j]]
+            listify = []
+            for k in self.Markov_classes:
+                listify.append[Markov_dict[k]]
+            self.Markov_mat = np.matrix(listify)
+            return self.Markov_mat, Markov_classes
 
 if __name__ == '__main__':
     '''
@@ -499,9 +494,10 @@ if __name__ == '__main__':
         example.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
         print 'Order ' + str(i+1) + ' RFC testing score = ' + str(example.rfc_score())
     '''
-    Markov_test = Swymify()
-    Markov_test.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
-    print Markov_test.rfc_test()
-    Markov_test.rfc_fit()
-    Markov_test.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
-    print Markov_test.rfc_score()
+    example = Swymify()
+    example.swym_load_data('data/session_data_training_feb.csv', 'data/devices_data_training_feb.csv')
+    print example.rfc_test()
+    example.rfc_fit()
+    example.swym_read_new('data/session_data_test_march.csv','data/devices_data_test_march.csv')
+    print example.rfc_score()
+    example_mat, example_class = example.markovify('8k5novj0knl8vha42324qs62p6vfa3im8djvdctm3m8p6gqkdwpnu632xpczvo5r')
