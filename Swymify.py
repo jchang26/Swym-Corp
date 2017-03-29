@@ -475,14 +475,14 @@ class Swymify(object):
                             Markov_x[j] = 0
                 Markov_dict[i] = self.model.predict_proba(Markov_x)
             #Change to numpy matrix for easier use
-            self.Markov_classes = np.empty(len(self.model.classes_), dtype = str)
-            for j in range(len(self.Markov_classes)):
-                self.Markov_classes[j] = self.events_desc[self.model.classes_[j]]
+            self.Markov_classes = []
+            for j in self.model.classes_:
+                self.Markov_classes.append(self.events_desc[j])
             listify = []
             for k in self.Markov_classes:
-                listify.append[Markov_dict[k]]
-            self.Markov_mat = np.matrix(listify)
-            return self.Markov_mat, Markov_classes
+                listify.append(Markov_dict[k][0])
+            self.Markov_mat = np.array(listify)
+            return self.Markov_mat, self.Markov_classes
 
 if __name__ == '__main__':
     '''
