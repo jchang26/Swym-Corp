@@ -1,6 +1,5 @@
 # SWYM CORPORATION
 
-<br>
 ![swym_logo](images/Swym-Logo.png)
 
 ## BUSINESS UNDERSTANDING
