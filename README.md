@@ -1,6 +1,7 @@
 # SWYM CORPORATION
 
 <br>
+![swym_logo](images/Swym-Logo.png)
 
 ## BUSINESS UNDERSTANDING
 Swym is a company which aims to help E-Commerce brands craft more seamless and personalized experiences for their shoppers. They are built on the Shopify platform for online stores, and add functionality to those sites in the form of applications such as Wishlist+ and Watchlist. The main goal of this project was to use machine learning algorithms to accurately model customer journeys based on available user context, and to leverage that predictive power to further optimize the online shopping experience for individual users.
