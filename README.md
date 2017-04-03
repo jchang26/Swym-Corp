@@ -1,6 +1,6 @@
 # SWYM CORPORATION
 
-<br />
+<br>
 
 ## BUSINESS UNDERSTANDING
 Swym is a company which aims to help E-Commerce brands craft more seamless and personalized experiences for their shoppers. They are built on the Shopify platform for online stores, and add functionality to those sites in the form of applications such as Wishlist+ and Watchlist. The main goal of this project was to use machine learning algorithms to accurately model customer journeys based on available user context, and to leverage that predictive power to further optimize the online shopping experience for individual users.
@@ -27,7 +27,11 @@ The bulk of my work on this project went into cleaning and converting the availa
 
 I developed a comprehensive Python class named "Swymify" to accomplish all of the above. The class also includes various methods for fitting and evaluating various machine learning models.
 
+<br>
+
 ![tech_stack](images/Capstone-Tools.png)
+
+<br>
 
 ## MODELING
 Models were trained on data through the full month of February 2017 and tested on data from the same providers for the first week of March 2017. Prediction accuracy was the preferred measure of success. I evaluated three different classification techniques for predicting a Swym user's next action: Random Forest, Gradient Boosting, and Support Vector Machine. I tuned the hyperparameters for each of these three models via Grid Search, and compared them using 5-fold cross validation on the training data. The accuracies are as follows:
