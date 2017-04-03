@@ -31,8 +31,6 @@ I developed a comprehensive Python class named "Swymify" to accomplish all of th
 
 ![tech_stack](images/Capstone-Tools.png)
 
-<br>
-
 ## MODELING
 Models were trained on data through the full month of February 2017 and tested on data from the same providers for the first week of March 2017. Prediction accuracy was the preferred measure of success. I evaluated three different classification techniques for predicting a Swym user's next action: Random Forest, Gradient Boosting, and Support Vector Machine. I tuned the hyperparameters for each of these three models via Grid Search, and compared them using 5-fold cross validation on the training data. The accuracies are as follows:
 
