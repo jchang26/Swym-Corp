@@ -37,6 +37,12 @@ Models were trained on data through the full month of February 2017 and tested o
 ## EVALUATION
 Accuracy of predictions within test dataset. Will probably cross-validate.
 
+## MARKOV CHAINS
+
+<br>
+
+![Markov_Example](images/Markov-Chain.png)
+
 ## DEPLOYMENT
 Academic Paper detailing results and conclusions, and hopefully a web app where you can input user actions within a given session and see what the next predicted action is. Probability of eventual purchase follows directly and should be output as well.
 
