@@ -3,7 +3,7 @@
 ![swym_logo](images/Swym-Logo.png)
 
 ## CAPSTONE PRESENTATION
-The CRISP-DM workflow and results for this project were presented at the Galvanize Capstone Showcase on March 30, 2017. Here is a link to the slides used: [Capstone Presentation](https://docs.google.com/presentation/d/1RgEDtY8h6ofiUyVXg3AkmAJZB5d05S5E-ppPsC_aL20/edit?usp=sharing)
+The CRISP-DM workflow and results for this project were presented at the Galvanize Capstone Showcase on March 30, 2017. Here is a [link to the slides](https://docs.google.com/presentation/d/1RgEDtY8h6ofiUyVXg3AkmAJZB5d05S5E-ppPsC_aL20/edit?usp=sharing) used in the presentation.
 
 ## BUSINESS UNDERSTANDING
 Swym is a company which aims to help E-Commerce brands craft more seamless and personalized experiences for their shoppers. They are built on the Shopify platform for online stores, and add functionality to those sites in the form of applications such as Wishlist+ and Watchlist. The main goal of this project was to use machine learning algorithms to accurately model customer journeys based on available user context, and to leverage that predictive power to further optimize the online shopping experience for individual users.
@@ -41,6 +41,7 @@ Models were trained on data through the full month of February 2017 and tested o
 Accuracy of predictions within test dataset. Will probably cross-validate.
 
 ## MARKOV CHAINS
+One very useful possible output of the model is a Markov Chain, which can be used to chart a user's likely sequence of actions in a given session. The Markov Chain transition probabilities can be initiated using the probabilities from the random forest classifier, based on a user's starting session information and any number of prior actions. Below is the first order Markov transition matrix for one example user pulled from the training dataset.
 
 <br>
 
