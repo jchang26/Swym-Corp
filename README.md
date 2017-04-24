@@ -41,14 +41,16 @@ Models were trained on data through the full month of February 2017 and tested o
 Accuracy of predictions within test dataset. Will probably cross-validate.
 
 ## MARKOV CHAINS
-One very useful possible output of the model is a Markov Chain, which can be used to chart a user's likely sequence of actions in a given session. The Markov Chain transition probabilities can be initiated using the probabilities from the random forest classifier, based on a user's starting session information and any number of prior actions. Below is the first order Markov transition matrix for one example user pulled from the training dataset.
+One very useful output of the model is a Markov Chain, which can be used to chart a user's likely sequence of actions in a given session. The Markov Chain transition probabilities can be initiated using the probabilities from the random forest classifier, based on a user's starting session information and any number of prior actions. Below is the first order Markov transition matrix for one example user pulled from the training dataset.
 
 <br>
 
 ![Markov_Example](images/Markov-Chain.png)
 
-## DEPLOYMENT
-Academic Paper detailing results and conclusions, and hopefully a web app where you can input user actions within a given session and see what the next predicted action is. Probability of eventual purchase follows directly and should be output as well.
-
 ## NEXT STEPS
-Webscraping additional fields from actual page urls (i.e. product descriptions, images)
+Possible next steps include:
+
+* Deployment: Return the model to Swym in the most useful or preferred format.
+* Scaling Up: Build the model on additional months or providers for enhanced accuracy.
+* Product Specificity: Narrow down the outputs of the model to be specific to certain products, as opposed to user actions in general (i.e. probability of making a purchase vs. probability of purchasing a particular item).
+* Additional Features: Definitely more potentially predictive variables to be derived from the data. For instance, I would have liked to explore whether the images displayed or text descriptions on various Shopify sites affected the likelihood of certain user actions such as purchasing.
