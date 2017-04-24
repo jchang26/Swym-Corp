@@ -2,6 +2,9 @@
 
 ![swym_logo](images/Swym-Logo.png)
 
+## CAPSTONE PRESENTATION
+The CRISP-DM workflow and results for this project were presented at the Galvanize Capstone Showcase on March 30, 2017. Here is a link to the slides used: [Capstone Presentation](https://docs.google.com/presentation/d/1RgEDtY8h6ofiUyVXg3AkmAJZB5d05S5E-ppPsC_aL20/edit?usp=sharing)
+
 ## BUSINESS UNDERSTANDING
 Swym is a company which aims to help E-Commerce brands craft more seamless and personalized experiences for their shoppers. They are built on the Shopify platform for online stores, and add functionality to those sites in the form of applications such as Wishlist+ and Watchlist. The main goal of this project was to use machine learning algorithms to accurately model customer journeys based on available user context, and to leverage that predictive power to further optimize the online shopping experience for individual users.
 
@@ -25,7 +28,7 @@ The bulk of my work on this project went into cleaning and converting the availa
 * Access history for the user on each Shopify site
 * Tf-idf vectors for page title and product category
 
-I developed a comprehensive Python class named "Swymify" to accomplish all of the above. The class also includes various methods for fitting and evaluating various machine learning models.
+I developed a comprehensive Python class named "Swymify" to accomplish all of the above. The class also includes methods to fit and evaluate various machine learning models.
 
 <br>
 
