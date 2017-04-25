@@ -58,7 +58,7 @@ Page Views made up approximately 74.8% of the March testing data. Applying the R
 
 <br>
 
-Note that the test accuracies steadily increase as additional prior actions are included as features in the trained model. This pattern holds through six prior actions for the testing data. I stopped there because considering more past actions was computationally expensive, and because I felt that the data was too sparse past that point to make the results meaningful. The highest test accuracy I was able to obtain was 83.6%, which is a meaningful improvement of 8.8% over baseline.
+Note that the test accuracies steadily increase as additional prior actions are included as features in the trained model. This pattern holds through six prior actions for the testing data. I stopped there because considering more past actions was computationally expensive, and because I felt that the data was too sparse past that point to make the results meaningful. The highest test accuracy I was able to obtain was 83.6%, which is an improvement of 8.8% over baseline.
 
 ## MARKOV CHAINS
 One very useful output of the model is a Markov Chain, which can be used to chart a user's likely sequence of actions in a given session. The Markov Chain transition probabilities can be initiated using the probabilities from the Random Forest Classifier, based on a user's starting session information and any number of prior actions. Below is the first order Markov transition matrix for one example user pulled from the training dataset.
