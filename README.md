@@ -35,13 +35,33 @@ I developed a comprehensive Python class named "Swymify" to accomplish all of th
 ![tech_stack](images/Capstone-Tools.png)
 
 ## MODELING
-Models were trained on data through the full month of February 2017 and tested on data from the same providers for the first week of March 2017. Prediction accuracy was the preferred measure of success. I evaluated three different classification techniques for predicting a Swym user's next action: Random Forest, Gradient Boosting, and Support Vector Machine. I tuned the hyperparameters for each of these three models via Grid Search, and compared them using 5-fold cross validation on the training data. The accuracies are as follows:
+Models were trained on data through the full month of February 2017 and tested on data from the same providers for the first week of March 2017. Prediction accuracy was the preferred measure of success. I evaluated three different classification techniques for predicting a Swym user's next action: Random Forest, Gradient Boosting, and Support Vector Machine. I tuned the hyperparameters for each of these three models via Grid Search, and compared them using 5-fold cross validation on the training data. The training accuracies with one prior action included are as follows:
+
+* Random Forest: 71.7%
+* Gradient Boosting: 70.8%
+* Support Vector Machine: 66.7%
+
+I selected the Random Forest Classifier as my final model both because it had the highest accuracy on the training data and because it's processing speed was much faster than that of the other two algorithms.
+
+The baseline accuracy I was attempting to outperform was the proportion of user actions which belonged to the majority class, Page Views. This action made up about 65.4% of the training data. Below is a chart displaying the actual user action distribution for the training data compared to that predicted by the Random Forest Classifier.
+
+<br>
+
+![Train_User_Action_Distribution](images/Action-Distribution.png)
 
 ## EVALUATION
-Accuracy of predictions within test dataset. Will probably cross-validate.
+Page Views made up approximately 74.8% of the March testing data. Applying the Random Forest Classifier to the testing dataset yielded the following the following accuracies:
+
+<br>
+
+![Test_Accuracies](images/Test-Accuracies.png)
+
+<br>
+
+Note that the test accuracies steadily increase as additional prior actions are included as features in the trained model. This pattern holds through six prior actions for the testing data. I stopped there because considering more past actions was computationally expensive, and because I felt that the data was too sparse past that point to make the results meaningful. The highest test accuracy I was able to obtain was 83.6%, which is a meaningful improvement of 8.8% over baseline.
 
 ## MARKOV CHAINS
-One very useful output of the model is a Markov Chain, which can be used to chart a user's likely sequence of actions in a given session. The Markov Chain transition probabilities can be initiated using the probabilities from the random forest classifier, based on a user's starting session information and any number of prior actions. Below is the first order Markov transition matrix for one example user pulled from the training dataset.
+One very useful output of the model is a Markov Chain, which can be used to chart a user's likely sequence of actions in a given session. The Markov Chain transition probabilities can be initiated using the probabilities from the Random Forest Classifier, based on a user's starting session information and any number of prior actions. Below is the first order Markov transition matrix for one example user pulled from the training dataset.
 
 <br>
 
